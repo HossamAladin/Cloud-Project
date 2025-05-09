@@ -1,4 +1,4 @@
-# Use an official PHP runtime as a parent image
+# Use an official PHP image
 FROM php:8.2-apache
 
 # Install system dependencies
@@ -10,10 +10,9 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     zip \
     unzip \
-    libzip-dev
-
-# Clear cache
-RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+    libzip-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install PHP extensions
 RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
@@ -22,27 +21,41 @@ RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # Set working directory
-WORKDIR /var/www/html
+WORKDIR /app
 
 # Copy project files
-COPY Smart-Budget-Manager-main /var/www/html
+COPY . /app
 
-# Install application dependencies
-RUN composer install --no-dev --optimize-autoloader
+# Verify project structure
+RUN ls -la
 
-# Generate application key
-RUN php artisan key:generate
+# Install Composer dependencies
+RUN if [ -f "Smart-Budget-Manager-main/composer.json" ]; then \
+        cd Smart-Budget-Manager-main && \
+        composer install --no-dev --optimize-autoloader; \
+    elif [ -f "composer.json" ]; then \
+        composer install --no-dev --optimize-autoloader; \
+    else \
+        echo "No composer.json found" && exit 1; \
+    fi
 
-# Clear configuration cache
-RUN php artisan config:clear
+# Generate app key and clear config (if in Laravel project)
+RUN if [ -f "Smart-Budget-Manager-main/artisan" ]; then \
+        cd Smart-Budget-Manager-main && \
+        php artisan key:generate && \
+        php artisan config:clear; \
+    elif [ -f "artisan" ]; then \
+        php artisan key:generate && \
+        php artisan config:clear; \
+    fi
 
 # Set permissions
-RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+RUN chown -R www-data:www-data /app
 
-# Enable Apache mod_rewrite
+# Enable Apache rewrite
 RUN a2enmod rewrite
 
-# Expose port 80
+# Expose port
 EXPOSE 80
 
 # Start Apache
