@@ -1,97 +1,61 @@
-# Use PHP 8.2 with Apache
+# Use an official PHP image
 FROM php:8.2-apache
 
-# Install system dependencies and PHP extensions
-RUN set -eux; \
-    # Update package lists and install essential dependencies
-    apt-get update && apt-get install -y --no-install-recommends \
-        git \
-        curl \
-        wget \
-        zip \
-        unzip \
-        libzip-dev \
-        libpng-dev \
-        libonig-dev \
-        libxml2-dev \
-        libfreetype6-dev \
-        libjpeg62-turbo-dev \
-        libwebp-dev \
-        libxpm-dev \
-        libmcrypt-dev \
-        libreadline-dev \
-        libssl-dev \
-        libcurl4-openssl-dev \
-        pkg-config \
-        libssl-dev \
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    libpng-dev \
+    libonig-dev \
+    libxml2-dev \
+    zip \
+    unzip \
+    libzip-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 # Install PHP extensions
-RUN set -eux; \
-    # Configure and install PHP extensions
-    docker-php-ext-configure gd \
-        --with-freetype \
-        --with-jpeg \
-        --with-webp \
-        --with-xpm \
-    && docker-php-ext-install -j$(nproc) \
-        pdo_mysql \
-        mysqli \
-        mbstring \
-        exif \
-        pcntl \
-        bcmath \
-        gd \
-        zip \
-        intl \
-        soap \
-        sockets
+RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # Set working directory
-WORKDIR /var/www/html
+WORKDIR /app
 
-# Copy application files
-COPY . /var/www/html
+# Copy project files
+COPY . /app
 
-# Create .env file if it doesn't exist
-RUN if [ ! -f .env ]; then \
-        cp .env.example .env; \
+# Verify project structure
+RUN ls -la
+
+# Install Composer dependencies
+RUN if [ -f "Smart-Budget-Manager-main/composer.json" ]; then \
+        cd Smart-Budget-Manager-main && \
+        composer install --no-dev --optimize-autoloader; \
+    elif [ -f "composer.json" ]; then \
+        composer install --no-dev --optimize-autoloader; \
+    else \
+        echo "No composer.json found" && exit 1; \
     fi
 
-# Install Composer dependencies with comprehensive error handling
-RUN set -eux; \
-    # Ensure Composer uses the correct PHP version
-    composer diagnose || true; \
-    # Clear any existing vendor directory
-    rm -rf vendor; \
-    # Install dependencies with verbose output and no interaction
-    composer install --no-interaction --no-plugins --no-scripts --verbose
+# Generate app key and clear config (if in Laravel project)
+RUN if [ -f "Smart-Budget-Manager-main/artisan" ]; then \
+        cd Smart-Budget-Manager-main && \
+        php artisan key:generate && \
+        php artisan config:clear; \
+    elif [ -f "artisan" ]; then \
+        php artisan key:generate && \
+        php artisan config:clear; \
+    fi
 
-# Generate application key
-RUN php artisan key:generate
+# Set permissions
+RUN chown -R www-data:www-data /app
 
-# Ensure autoloader is generated
-RUN composer dump-autoload
-
-# Set proper permissions
-RUN chown -R www-data:www-data \
-    /var/www/html/storage \
-    /var/www/html/bootstrap/cache
-
-# Set ServerName to suppress warning
-RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
-
-# Copy Apache configuration
-COPY apache-config.conf /etc/apache2/sites-available/000-default.conf
-
-# Enable Apache modules
+# Enable Apache rewrite
 RUN a2enmod rewrite
 
-# Expose port 80
+# Expose port
 EXPOSE 80
 
 # Start Apache
