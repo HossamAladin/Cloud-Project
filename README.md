@@ -579,15 +579,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Microsoft Azure for reliable cloud infrastructure
 - Open source community for amazing libraries and tools
 
-## 📞 Support
-
-For support, email your-email@example.com or open an issue in the GitHub repository.
-
----
-
-**⭐ If you find this project useful, please consider giving it a star!**
-
-**🔗 Live Demo**: [Coming Soon]
-
-**📖 Documentation**: [Wiki](https://github.com/HossamAladin/Cloud-Project/wiki)
 
